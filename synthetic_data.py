@@ -1,63 +1,116 @@
 import pandas as pd
 import numpy as np
-import random
 
-# Set random seed for reproducibility
-np.random.seed(42)
+# Parameters
+num_users = 1000  # Number of users
+years = [2024]  # Year range
+months = list(range(1, 13))  # Months (1 to 12)
+scenarios = [
+    ("Stable Salary & Stable Fixed Expenses", 0.25),
+    ("Stable Salary & Increasing Fixed Expenses", 0.15),
+    ("Stable Salary & Decreasing Fixed Expenses", 0.05),
+    ("Salary Increases & Fixed Expenses Remain Stable", 0.30),
+    ("Salary Increases & Fixed Expenses Increase", 0.20),
+    ("Salary Increases & Fixed Expenses Decrease", 0.05),
+]
 
-# Number of users
-num_users = 1000
+# Spending behavior types
+spending_behaviors = {
+    "Frugal": (0.3, 0.4),   # Saves more, spends less
+    "Balanced": (0.4, 0.6), # Moderate spending
+    "Extravagant": (0.6, 0.8) # High spending
+}
 
-# Generate User IDs
-user_ids = [f"U{str(i).zfill(3)}" for i in range(1, num_users + 1)]
+# Festive spending months
+festive_months = {3: (1.1, 1.3), 9: (1.05, 1.15), 10: (1.1, 1.3), 11: (1.05, 1.15), 12: (1.1, 1.3)}
 
-# Generate salaries (Low: 30k-50k, Mid: 50k-80k, High: 80k-150k)
-salary_ranges = [(30000, 50000), (50000, 80000), (80000, 300000)]
-salaries = [random.randint(*random.choice(salary_ranges)) for _ in range(num_users)]
+# Festive spending profiles
+festive_profiles = {
+    "All Festivals": list(festive_months.keys()),  # Spends in all festive months
+    "Selective Festivals": np.random.choice(list(festive_months.keys()), size=2, replace=False).tolist(),  # Spends in selected months
+    "No Impact": []  # No festive impact
+}
 
-# Generate fixed expenses
-fixed_rent = [int(s * random.uniform(0.25, 0.35)) for s in salaries]  # 25-35% of salary
-emi = [int(s * random.uniform(0.05, 0.15)) for s in salaries]  # 5-15% of salary
+# Function to determine realistic fixed expenses
+def calculate_fixed_expenses(salary):
+    if salary < 50000:
+        return np.random.randint(10000, 23000)
+    elif salary < 100000:
+        return np.random.randint(23000, 40000)
+    elif salary < 200000:
+        return np.random.randint(40000, 80000)
+    else:
+        return np.random.randint(60000, 120000)
 
-# Generate variable expenses
-groceries = [int(s * random.uniform(0.08, 0.12)) for s in salaries]  # 8-12% of salary
-subscriptions = [random.randint(0, 3000) for _ in range(num_users)]
-upi_spent = [int(s * random.uniform(0.07, 0.25)) for s in salaries]  # 7-25% of salary
-credit_spent = [int(s * random.uniform(0.10, 0.25)) for s in salaries]  # 10-25% of salary
-utilities = [random.randint(1000, 8000) for _ in range(num_users)]
+# Function to generate data
+def generate_data():
+    data = []
+    user_ids = [f"U{str(i).zfill(3)}" for i in range(1, num_users + 1)]
+    
+    for user_id in user_ids:
+        base_salary = np.random.randint(20000, 300000)
+        fixed_expenses = calculate_fixed_expenses(base_salary)
+        salary_increase_applied = False
+        salary_increase_month = np.random.choice(months[2:8])  # Between March and August
+        scenario = np.random.choice([s[0] for s in scenarios], p=[s[1] for s in scenarios])
+        spending_type = np.random.choice(list(spending_behaviors.keys()), p=[0.3, 0.5, 0.2])
+        min_expense_ratio, max_expense_ratio = spending_behaviors[spending_type]
+        festive_spending_type = np.random.choice(list(festive_profiles.keys()), p=[0.3, 0.4, 0.3])
+        user_festive_months = festive_profiles[festive_spending_type]
 
-# Generate savings and investments
-# bills_savings = [int(s * random.uniform(0.10, 0.20)) for s in salaries]  # 10-20% of salary
-investment_percentage = [random.randint(10, 30) for _ in range(num_users)]  # 10-30% investment
+        for year in years:
+            for month in months:
+                # Apply scenario rules
+                if scenario.startswith("Stable Salary"):
+                    salary = base_salary
+                    if "Increasing" in scenario and np.random.rand() < 0.15:
+                        fixed_expenses += np.random.randint(500, 2000)
+                    elif "Decreasing" in scenario:
+                        if np.random.rand() < 0.05:  # 5% chance per month
+                            decrease_amount = np.random.randint(500, 2000)
+                            fixed_expenses = max(fixed_expenses - decrease_amount, fixed_expenses * 0.9)  # More stable decrease
+                else:
+                    if not salary_increase_applied and month == salary_increase_month:
+                        base_salary += np.random.randint(5000, 30000)
+                        salary_increase_applied = True
+                    salary = base_salary
+                    
+                    if "Fixed Expenses Increase" in scenario and np.random.rand() < 0.20:
+                        fixed_expenses += np.random.randint(500, 2000)
+                    elif "Fixed Expenses Decrease" in scenario:
+                        if np.random.rand() < 0.05:  # 5% chance per month
+                            decrease_amount = np.random.randint(500, 2000)
+                            fixed_expenses = max(fixed_expenses - decrease_amount, fixed_expenses * 0.9)
+                
+                # Apply base spending behavior
+                variable_expenses = np.random.randint(int(min_expense_ratio * salary), int(max_expense_ratio * salary))
+                
+                # Apply festive spending multiplier only if user spends in this month
+                if month in user_festive_months:
+                    min_multiplier, max_multiplier = festive_months[month]
+                    variable_expenses = int(variable_expenses * np.random.uniform(min_multiplier, max_multiplier))
+                
+                total_expenses = fixed_expenses + variable_expenses
+                savings = salary - total_expenses
+                savings_rate = savings / salary * 100 if salary > 0 else 0
+                expense_fluctuation = np.random.uniform(-0.05, 0.05)
+                
+                # Assign risk category
+                risk_category = "Low Risk" if savings_rate >= 25 else "Medium Risk" if savings_rate >= 15 else "High Risk"
+                
+                data.append([
+                    user_id, year, month, scenario, salary, fixed_expenses, 
+                    variable_expenses, total_expenses, savings, 
+                    round(savings_rate, 2), round(expense_fluctuation, 2), risk_category
+                ])
+    
+    return pd.DataFrame(data, columns=[
+        "User_ID", "Year", "Month", "Scenario", "Salary", "Fixed_Expenses", 
+        "Variable_Expenses", "Total_Expenses", "Savings", "Savings_Rate", 
+        "Expense_Fluctuation", "Risk_Category"
+    ])
 
-# Generate month labels
-months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-month_column = [random.choice(months) for _ in range(num_users)]
-
-# Create DataFrame
-df = pd.DataFrame({
-    "UserID": user_ids,
-    "Salary": salaries,
-    "Fixed_Rent": fixed_rent,
-    "EMI": emi,
-    "Groceries": groceries,
-    "Subscriptions": subscriptions,
-    "UPI_Spent": upi_spent,
-    "CreditCard_Spent": credit_spent,
-    "Utilities": utilities,
-    # "Bills_Savings": bills_savings,
-    "Investment_Percentage": investment_percentage,
-    "Month": month_column
-})
-
-# Introduce null values in Subscriptions (randomly select 10% of rows)
-num_nulls = int(0.17 * num_users)  # 17% of data
-null_indices = random.sample(range(num_users), num_nulls)  # Pick random indices
-
-df.loc[null_indices, "Subscriptions"] = np.nan  # Set selected indices to NaN
-
-# Save to CSV
+# Generate dataset
+df = generate_data()
+print(df.head())  # Preview data
 df.to_csv("synthetic_budget_data.csv", index=False)
-
-# Display sample data
-print(df.head())
