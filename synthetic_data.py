@@ -57,6 +57,10 @@ def generate_data():
         min_expense_ratio, max_expense_ratio = spending_behaviors[spending_type]
         festive_spending_type = np.random.choice(list(festive_profiles.keys()), p=[0.3, 0.4, 0.3])
         user_festive_months = festive_profiles[festive_spending_type]
+        
+        # Initialize balance for January
+        balance = np.random.randint(200000, 250000)
+        previous_savings = 0  # Store last month's savings for balance update
 
         for year in years:
             for month in months:
@@ -95,17 +99,23 @@ def generate_data():
                 savings_rate = savings / salary * 100 if salary > 0 else 0
                 expense_fluctuation = np.random.uniform(-0.05, 0.05)
                 
+                # ✅ **Correct Balance Calculation**
+                if month > 1:
+                    balance += previous_savings  # Add previous month's savings
+                
+                previous_savings = savings  # Store savings for next month
+
                 # Assign risk category
                 risk_category = "Low Risk" if savings_rate >= 25 else "Medium Risk" if savings_rate >= 15 else "High Risk"
                 
                 data.append([
-                    user_id, year, month, scenario, salary, fixed_expenses, 
+                    user_id, year, month, balance, scenario, salary, fixed_expenses, 
                     variable_expenses, total_expenses, savings, 
                     round(savings_rate, 2), round(expense_fluctuation, 2), risk_category
                 ])
     
     return pd.DataFrame(data, columns=[
-        "User_ID", "Year", "Month", "Scenario", "Salary", "Fixed_Expenses", 
+        "User_ID", "Year", "Month", "Balance", "Scenario", "Salary", "Fixed_Expenses", 
         "Variable_Expenses", "Total_Expenses", "Savings", "Savings_Rate", 
         "Expense_Fluctuation", "Risk_Category"
     ])
